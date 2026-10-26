@@ -3505,10 +3505,25 @@ class WebApp(unittest.TestCase):
                     self.assertEqual(len(models), 1)
                     model = models[0]
                     self.assertEqual(model["id"], svc.model)
+                    self.assertEqual(model["name"], svc.model)
                     self.assertEqual(model["status"]["value"], "loaded")
                     self.assertEqual(model["meta"]["n_ctx"], 262144)
+                    self.assertEqual(model["context_length"], 262144)
+                    self.assertEqual(model["max_model_len"], 262144)
                     self.assertEqual(model["architecture"]["input_modalities"],
                                      ["text", "image"] if vision else ["text"])
+                    self.assertEqual(model["thinking"], {
+                        "supported": True, "default": "high",
+                        "efforts": ["none", "low", "medium", "high"],
+                    })
+                    self.assertEqual(model["wire"],
+                                     {"request": "reasoning_effort", "stream": "reasoning_content"})
+                    for key in ("supports_tools", "supports_tool_calls", "supports_system_role",
+                                "supports_parallel_tool_calls", "supports_preserve_reasoning"):
+                        self.assertIs(model[key], True)
+                    self.assertNotIn("max_tokens", model)
+                    self.assertNotIn("max_output_tokens", model)
+                    self.assertNotIn("max_completion_tokens", model)
                 code, _, body = self.get("/props?model=" + svc.model + "&autoload=false")
                 self.assertEqual(code, 200)
                 props = json.loads(body)
@@ -3522,10 +3537,23 @@ class WebApp(unittest.TestCase):
                 self.assertEqual(props["modalities"]["vision"], vision is not None)
                 self.assertEqual(props["total_slots"], 1)
                 self.assertFalse(props["models_autoload"])
+            svc.shared = {"reasoning_effort": "low"}
+            model = json.loads(self.get("/v1/models")[2])["data"][0]
+            self.assertEqual(model["thinking"]["default"], "low")
             svc.shared = {}
             props = json.loads(self.get("/props")[2])
             self.assertEqual(props["default_generation_settings"]["params"]["n_predict"], -1)
             self.assertEqual(self.get("/props?model=not-loaded&autoload=true")[0], 404)
+            # reported_ctx() of 0: keep meta.n_ctx, omit the client discovery fields
+            svc.engine.max_context = 0
+            if hasattr(svc.engine, "known_ctx"):
+                del svc.engine.known_ctx
+            model = json.loads(self.get("/v1/models")[2])["data"][0]
+            self.assertEqual(model["meta"]["n_ctx"], 0)
+            self.assertNotIn("context_length", model)
+            self.assertNotIn("max_model_len", model)
+            self.assertTrue(model["thinking"]["supported"])
+            self.assertEqual(model["wire"]["request"], "reasoning_effort")
         finally:
             svc.engine.max_context, svc.vision, svc.sampling_defaults, svc.shared = previous
 
@@ -3566,6 +3594,9 @@ class WebApp(unittest.TestCase):
                         self.assertEqual(props["chat_template"], text)
                         for key, value in expected.items():
                             self.assertIs(props["chat_template_caps"][key], value)
+                        listed = json.loads(self.get("/v1/models")[2])["data"][0]
+                        for key, value in expected.items():
+                            self.assertIs(listed[key], value)
         finally:
             self.svc.template = original
 

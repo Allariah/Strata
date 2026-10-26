@@ -4152,6 +4152,37 @@ class Service:
         prompt from it would send nothing, #351).  Reporting only: requests are checked in prepare()."""
         return int(getattr(self.engine, "max_context", 0) or getattr(self.engine, "known_ctx", 0) or 0)
 
+    def openai_chat_model_row(self) -> dict:
+        """One GET /v1/models row for the loaded chat model: context, thinking, wire names, and template caps.
+        No model path, chat template text, or live hardware — those stay on /props."""
+        n_ctx = self.reported_ctx()
+        effort = self.effort_default() or "high"
+        if effort not in ("none", "low", "medium", "high"):
+            effort = "high"
+        row = {
+            "id": self.model,
+            "object": "model",
+            "name": self.model,
+            "status": {"value": "loaded"},
+            "meta": {"n_ctx": n_ctx},
+            "architecture": {
+                "input_modalities": ["text", "image"] if self.vision is not None else ["text"],
+                "output_modalities": ["text"],
+            },
+            "thinking": {
+                "supported": True,
+                "default": effort,
+                "efforts": ["none", "low", "medium", "high"],
+            },
+            "wire": {"request": "reasoning_effort", "stream": "reasoning_content"},
+        }
+        if n_ctx > 0:                      # omp reads context_length / max_model_len; meta.n_ctx alone is not enough
+            row["context_length"] = n_ctx
+            row["max_model_len"] = n_ctx
+        for key, value in (getattr(self.template, "caps", None) or {}).items():
+            row[key] = bool(value)
+        return row
+
     def reasoning_budget(self, req) -> int | None:
         """#123: the most tokens this request may think, or None: the request's `reasoning_budget_tokens` (or, as
         llama.cpp reads it, `thinking_budget_tokens`), else the config's.  0 (or less) means no budget, so a request can
@@ -6668,10 +6699,7 @@ def make_handler(svc: Service):
             elif path in ("/v1/models", "/models"):
                 if self._authorized():
                     loaded = svc.loaded()
-                    model = {"id": svc.model, "object": "model", "status": {"value": "loaded"},
-                             "meta": {"n_ctx": svc.reported_ctx()},
-                             "architecture": {"input_modalities": ["text", "image"] if svc.vision is not None else ["text"],
-                                              "output_modalities": ["text"]}}
+                    model = svc.openai_chat_model_row()
                     if not loaded and (svc.idle_unload_s or getattr(svc.engine, "unloaded", False)):
                         model["status"] = {"value": "unloaded"}   # like llama-server's router: listed, loads on use
                         loaded = True

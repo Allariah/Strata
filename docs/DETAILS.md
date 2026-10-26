@@ -420,14 +420,26 @@ print(r.choices[0].message.content)
   `strata:live_tok_s`, `strata:last_hit_rate`, `strata:gpu_util`, `strata:ram_used_bytes`). A value the server does not have
   has no sample. With an API key, the scraper sends it as a bearer token. Ready-made files are in `docs/monitoring/`:
   `prometheus.yml`, `servicemonitor.yaml` and `grafana-strata.json`.
-- **Metadata.** `/models` and `/v1/models` list only the loaded model, with its context limit and input modalities. `/props` exposes
-  the chat template, context limit, configured generation defaults, model path and engine version. `n_predict: -1` means no
-  fixed output cap. `/slots` uses llama.cpp's names (`n_ctx`, `n_prompt_tokens`). `total_slots` is the number of `--batch` slots
+- **Metadata.** `/models` and `/v1/models` list only the loaded model. Each chat row carries:
+  - **Name.** Top-level `name` (the model id on the engine; the host uses the same label as `meta.label`).
+  - **Context.** `context_length`, `max_model_len` and `meta.n_ctx` — the same positive token count from the engine
+    (the two top-level fields are omitted when that count is 0).
+  - **Thinking.** `thinking.supported`, `thinking.default` (high unless the config sets `reasoning_effort`), and
+    `thinking.efforts` (`none` / `low` / `medium` / `high`).
+  - **Wire.** `wire.request` is `reasoning_effort`; `wire.stream` is `reasoning_content` (streamed thinking).
+  - **Pictures.** `architecture.input_modalities` / `output_modalities` when known.
+  - **Tools.** The same booleans as `/props` `chat_template_caps` (`supports_tools`, `supports_tool_calls`,
+    `supports_parallel_tool_calls`, `supports_system_role`, `supports_preserve_reasoning`), on the row itself so a
+    share client need not call `/props`.
+  The list does not set `max_tokens` / `max_output_tokens` / `max_completion_tokens` (no fixed output cap). It does not
+  include the model path, chat template text, or live hardware. `/props` still exposes the chat template, context
+  limit, configured generation defaults, model path and engine version. `n_predict: -1` means no fixed output cap.
+  `/slots` uses llama.cpp's names (`n_ctx`, `n_prompt_tokens`). `total_slots` is the number of `--batch` slots
   (1 without). These endpoints require the API key when one is configured and never load, unload or restart models.
 - **`chat_template_caps`** (llama.cpp's field names) is checked by rendering small requests when the template loads. A rejected
   feature is `false`. `supports_tools`, `supports_tool_calls`, `supports_parallel_tool_calls`, `supports_system_role` and
-  `supports_preserve_reasoning` are hints for clients, not a promise that the model follows a request. Zed's llama.cpp provider
-  reads this object to offer tools.
+  `supports_preserve_reasoning` are hints for clients, not a promise that the model follows a request. The same booleans
+  appear on each `/v1/models` chat row. Zed's llama.cpp provider reads the `/props` object to offer tools.
 
 ### Thinking levels: none, low, medium, high
 
