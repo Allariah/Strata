@@ -32,6 +32,9 @@ test('sharing never exposes host controls or files, and a key is checked when on
     const {url}=await share.start();const origin=new URL(url).origin;
     assert.equal((await fetch(origin+'/api/tasks')).status,404);
     assert.equal((await fetch(origin+'/examples/project-brief.pdf')).status,404);
+    for (const path of ['/props','/health','/slots','/metrics','/v1/status','/status']) {
+      assert.equal((await fetch(origin+path)).status,404,path);
+    }
     assert.equal((await fetch(url+'/models')).status,401);
     assert.equal((await fetch(url+'/models',{headers:{authorization:'Bearer test-only-key'}})).status,200);
   } finally {await share.stop();}

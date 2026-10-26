@@ -424,6 +424,10 @@ print(r.choices[0].message.content)
   the chat template, context limit, configured generation defaults, model path and engine version. `n_predict: -1` means no
   fixed output cap. `/slots` uses llama.cpp's names (`n_ctx`, `n_prompt_tokens`). `total_slots` is the number of `--batch` slots
   (1 without). These endpoints require the API key when one is configured and never load, unload or restart models.
+  The desktop app's native `GET /v1/models` (including the share-with-devices listener) reports the loaded instance's window as
+  `context_length`, `max_model_len` and `meta.n_ctx` when that count is known, and sets `architecture.input_modalities` /
+  `output_modalities` only when vision is known. The share listener still serves only `/v1/models`, `/v1/chat/completions` and
+  `/v1/messages`.
 - **`chat_template_caps`** (llama.cpp's field names) is checked by rendering small requests when the template loads. A rejected
   feature is `false`. `supports_tools`, `supports_tool_calls`, `supports_parallel_tool_calls`, `supports_system_role` and
   `supports_preserve_reasoning` are hints for clients, not a promise that the model follows a request. Zed's llama.cpp provider
